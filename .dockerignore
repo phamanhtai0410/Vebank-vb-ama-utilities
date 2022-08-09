@@ -1,0 +1,8 @@
+.idea
+*.pyc
+code/config
+test
+.vscode
+.git
+venv
+supervisord.pid
