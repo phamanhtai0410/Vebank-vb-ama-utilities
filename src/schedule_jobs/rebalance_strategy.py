@@ -8,6 +8,10 @@ from lib.utils import amqp
 from src.config import DefaultConfig
 from src.services.ama_config import AMAConfigService
 from src.models.pairs import PairsModel
+from pymodm import connect
+from lib.enums.database import DBName
+
+
 """
     JOB DESCRIPTION: Scheduled Jobs for passive rebalance
 """
@@ -19,9 +23,12 @@ def main(_cfg):
         "username": DefaultConfig.RABBIT_USER, "password": DefaultConfig.RABBIT_PASSWORD,
         "vhost": DefaultConfig.RABBIT_VHOST, "exchange_type": "topic"
     }
+    # Connect RabbitMQ
     cfg_rabbit.update(_cfg)
     mq = amqp.AmqpConnection(**cfg_rabbit)
     mq.connect()
+    # Connect MongoDB
+    connect(DefaultConfig.DB_APP, connect=False, alias=DBName.POOL)
 
     while True:
         """
@@ -43,7 +50,7 @@ def main(_cfg):
                     payload={
                         "pair_address": str(_pair["pair_address"]),
                         "factory_address": str(_factory_address),
-                        "router_address": str(_router_address)
+                        "router_address": str(_router_address),
                         "reserve0": str(_pair["reserve0"]),
                         "reserve1": str(_pair["reserve1"]),
                         "token0_address": str(_pair["token0_address"]),
