@@ -25,5 +25,6 @@ The following assumes the use of `python@>=3.8`.
 
 ### Service: 
 `python3 manage.py run`
+
 ### Job: 
 `python3 jobs/<hob_file_name> run -e <exchange_name> - k <key_name> -q <queue_name>`

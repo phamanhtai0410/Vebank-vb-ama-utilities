@@ -52,29 +52,34 @@ def make_call(contract_address, abi_file_name, call_function_name, params=[]):
 
 
 def make_transact(contract_address, abi_file_name, transact_function_name, params=[]):
-    # Establish connect to contracts
-    connector = Connect(DefaultConfig.VECHAIN_RPC)
-    # Wallet
-    with open("src/keystore", "r") as _f:
-        _keystore = json.load(_f)
-    _wallet = Wallet.fromKeyStore(
-        ks=_keystore,
-        password=DefaultConfig.KEYSTORE_PASSWORD
-    )
-    # Contract instance
-    _contract_instance = Contract.fromFile(f'src/abis/{abi_file_name}.json')
-    # Call function
-    _res = connector.transact(
-        wallet=_wallet,
-        contract=_contract_instance,
-        func_name=transact_function_name,
-        func_params=params,
-        to=contract_address
-    )
-    if not _res:
-        return {}
+    try:
+        # Establish connect to contracts
+        connector = Connect(DefaultConfig.VECHAIN_RPC)
+        # Wallet
+        with open("src/keystore", "r") as _f:
+            _keystore = json.load(_f)
+        _wallet = Wallet.fromKeyStore(
+            ks=_keystore,
+            password=DefaultConfig.KEYSTORE_PASSWORD
+        )
+        # Contract instance
+        _contract_instance = Contract.fromFile(f'src/abis/{abi_file_name}.json')
+        # Call function
+        _res = connector.transact(
+            wallet=_wallet,
+            contract=_contract_instance,
+            func_name=transact_function_name,
+            func_params=params,
+            to=contract_address
+        )
+        print("_res = ", _res)
+        if not _res:
+            return {}
+    except Exception as e:
+        print(e)
+        return e
 
-    return get(_res, 'decoded')
+    return _res
 
 
 """
@@ -98,7 +103,7 @@ def get_health_factor(_user):
         [_user],
         _contract_address
     )
-    if not _res or get(_res, 'decoded')['healthFactor'] == 2**256 - 1:
+    if not _res or get(_res, 'decoded')['healthFactor'] == 2 ** 256 - 1:
         return 0
 
     return truncate(get(_res, 'decoded')['healthFactor'] / (10 ** 18), 3)
@@ -159,7 +164,7 @@ def get_token_symbol(token_address):
 """
 
 
-def get_pair_reserves(pair_address):
+def get_pair_reserves(pair_address, _token0_decimals, _token1_decimals):
     # Establish connect to contracts
     connector = Connect(DefaultConfig.VECHAIN_RPC)
 
@@ -175,11 +180,9 @@ def get_pair_reserves(pair_address):
         pair_address
     )
 
-    return divide_unit(get(_res, "decoded")["_reserve0"]), divide_unit(get(_res, "decoded")["_reserve1"])
+    return divide_unit(get(_res, "decoded")["_reserve0"], _token0_decimals), \
+           divide_unit(get(_res, "decoded")["_reserve1"], _token1_decimals)
 
 
-def divide_unit(value):
-    return float(value / (10 ** 18))
-
-
-
+def divide_unit(value, decimal):
+    return float(value / (10 ** decimal))
