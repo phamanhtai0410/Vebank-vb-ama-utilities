@@ -1,10 +1,10 @@
 variables:
   REGION: asia-southeast1
-  IMAGE_NAME: vb-monitor-liquidation-job
-  APP_NAME_SCHEDULE: vb-monitor-lqd-schedule-job
-  APP_NAME_WORKER: vb-monitor-lqd-worker
-  APP_NAME_API: vb-monitor-lqd-api
-  CONTAINER_REPO_ASIA_DEV: 420811272222.dkr.ecr.ap-southeast-1.amazonaws.com/vb-develop-ecr/monitor-liquidation-job
+  IMAGE_NAME: vb-amm-utilities
+  APP_NAME_SCHEDULE: vb-amm-utilities-schedule-job
+  APP_NAME_WORKER: vb-amm-utilities-worker
+  APP_NAME_API: vb-amm-utilities-api
+  CONTAINER_REPO_ASIA_DEV: 420811272222.dkr.ecr.ap-southeast-1.amazonaws.com/vb-develop-ecr/amm-utilities
   CONTAINER_REPO_ASIA_STAG: 420811272222.dkr.ecr.ap-southeast-1.amazonaws.com/vb-staging-ecr/amm-utilities
   CONTAINER_REPO_ASIA_PROD: 420811272222.dkr.ecr.ap-southeast-1.amazonaws.com/vb-production-ecr/monitor-liquidation-job
   NAMESPACE_STAG: vb-jobs-stag
