@@ -1,4 +1,5 @@
 FROM 420811272222.dkr.ecr.ap-southeast-1.amazonaws.com/vb-staging-ecr:pythonbase_v1
+ENV PYTHONUNBUFFERED=0
 
 
 RUN apk update && apk add --no-cache  tzdata git make  build-base
