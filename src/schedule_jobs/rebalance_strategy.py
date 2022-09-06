@@ -58,6 +58,15 @@ def main(_cfg):
                         "token1_address": str(_pair["token1_address"]),
                     }
                 )
+                print("Push mess : ", {
+                        "pair_address": str(_pair["pair_address"]),
+                        "factory_address": str(_factory_address),
+                        "router_address": str(_router_address),
+                        "reserve0": str(_pair["reserve0"]),
+                        "reserve1": str(_pair["reserve1"]),
+                        "token0_address": str(_pair["token0_address"]),
+                        "token1_address": str(_pair["token1_address"]),
+                    })
         except Exception as e:
             print(e)
             sentry_sdk.capture_exception()
