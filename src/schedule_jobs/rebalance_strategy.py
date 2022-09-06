@@ -23,6 +23,7 @@ def main(_cfg):
         "username": DefaultConfig.RABBIT_USER, "password": DefaultConfig.RABBIT_PASSWORD,
         "vhost": DefaultConfig.RABBIT_VHOST, "exchange_type": "topic"
     }
+
     # Connect RabbitMQ
     cfg_rabbit.update(_cfg)
     mq = amqp.AmqpConnection(**cfg_rabbit)

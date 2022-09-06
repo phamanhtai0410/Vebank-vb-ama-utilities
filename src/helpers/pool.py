@@ -10,6 +10,7 @@ def get_amount_out(_amount_in, _fee, _reserve_in, _reserve_out):
 
 
 def calculate_amount_to_rebalance(_reserve0: float, _reserve1: float, _fee: int, _oracle_ratio: float) -> (int, float):
+    print(f"calculate_amount_to_rebalance for reserves : {_reserve0} {_reserve1}")
     _swap_token = 1 if (_reserve0 / _reserve1) > _oracle_ratio else 0
     if (_reserve0 / _reserve1) > _oracle_ratio:
         """
@@ -45,26 +46,28 @@ def calculate_amount_to_rebalance(_reserve0: float, _reserve1: float, _fee: int,
     print('The solution are {0} and {1}'.format(sol1, sol2))
     print('sol1.image : ', sol1.imag == 0)
     print('sol2.image : ', sol2.imag == 0)
-    if sol1.imag != 0 and sol2.imag != 0:
-        return _swap_token, None
+    _valid = []
 
     if get_amount_out(
         _amount_in=sol2.real,
         _fee=_fee,
         _reserve_in=_reserve1 if _swap_token else _reserve0,
         _reserve_out=_reserve0 if _swap_token else _reserve1
-    ) > 0:
-        return _swap_token, sol2.real
+    ) > 0 and sol2.real > 0:
+        _valid.append(sol2.real)
 
     if get_amount_out(
         _amount_in=sol1.real,
         _fee=_fee,
         _reserve_in=_reserve1 if _swap_token else _reserve0,
         _reserve_out=_reserve0 if _swap_token else _reserve1
-    ) > 0:
-        return _swap_token, sol1.real
+    ) > 0 and sol1.real > 0:
+        _valid.append(sol1.real)
 
-    return _swap_token, None
+    if len(_valid) == 0:
+        return _swap_token, None
+    else:
+        return _swap_token, min(_valid)
 
 
 

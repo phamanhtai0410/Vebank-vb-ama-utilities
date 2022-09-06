@@ -21,12 +21,14 @@ def request_inside(url, method, body={}, params={}):
             'Content-Type': 'application/json'
         }
         _data = json.dumps(body)
+        # print(f"url {url}; method {method}; body {body}; params {params}; headers {headers};")
         response = requests.request(method=method,
                                     url=url,
                                     data=_data,
                                     params=params,
                                     headers=headers,
                                     timeout=6)
+        # print("request inside : ", response.json())
         if response:
             return response.json()
     except Exception as e:
