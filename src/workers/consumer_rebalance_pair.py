@@ -170,8 +170,8 @@ def on_message_rebalance_pair(channel, method, properties, body):
                     {
                         "env": DefaultConfig.ENV,
                         "swap_info": {
-                            "amount_in": int(_amount_in * 10 ** _in_decimal),
-                            "amount_out_min": int(_amount_out_min),
+                            "amount_in": str(_amount_in * 10 ** _in_decimal),
+                            "amount_out_min": str(_amount_out_min),
                             "path": [
                                 _token1_address if _swap else _token0_address,
                                 _token0_address if _swap else _token1_address
@@ -182,7 +182,6 @@ def on_message_rebalance_pair(channel, method, properties, body):
                         "status": "Done" if isinstance(_resp, dict) else "Reverted"
                     }
                 )
-
     else:
         print("Limit threshold is invalid !!!")
 
