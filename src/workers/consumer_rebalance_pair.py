@@ -131,7 +131,7 @@ def on_message_rebalance_pair(channel, method, properties, body):
     """
         Handler for rebalance    
     """
-    if _limit_threshold != 0:
+    if _limit_threshold == 0:
         AMAConfigService.set_limit_threshold(
             pair=f"{_token0_symbol}{_token1_symbol}",
             value=1000
