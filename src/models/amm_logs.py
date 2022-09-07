@@ -14,7 +14,7 @@ class AmmHistoryLogsModel(BaseMG):
     env = fields.CharField(blank=True, default="")
     swap_info = fields.DictField(blank=True, default={})
     tx_id = fields.CharField(blank=True, default='')
-    tx_info = fields.DictField(blank=True, default={})
+    tx_info = fields.CharField(blank=True, default='')
     status = fields.CharField(blank=True, default='')
 
 

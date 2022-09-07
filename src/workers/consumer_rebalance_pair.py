@@ -20,6 +20,7 @@ from lib.util import dt_utcnow
 from src.models.amm_logs import AmmHistoryLogsModel
 from pymodm import connect
 from lib.enums.database import DBName
+from src.services.ama_config import AMAConfigService
 
 
 @handle_exception()
@@ -58,12 +59,24 @@ def on_message_rebalance_pair(channel, method, properties, body):
     _token0_symbol = get_token_symbol(_token0_address)
     _token1_symbol = get_token_symbol(_token1_address)
 
+    """
+        Modify symbol for oracle call
+    """
     if _token1_symbol == "WVET":
         _token1_symbol = "VET"
 
     if _token0_symbol == "WVET":
         _token0_symbol = "VET"
 
+    if _token0_symbol[0] == "v":
+        _token0_symbol = _token0_symbol[1:]
+
+    if _token1_symbol[0] == "v":
+        _token1_symbol = _token1_symbol[1:]
+
+    """
+        Call to Oracle API to get latest price of assets
+    """
     print(f"** Rebalance for pair {_token0_symbol}{_token1_symbol}")
     _token0_oracle_price = float(request_inside(
         method="GET",
@@ -87,9 +100,15 @@ def on_message_rebalance_pair(channel, method, properties, body):
             url=f"{DefaultConfig.API_URL}/v1/oracle/price/{_token1_symbol}BUSD/latest",
         )["data"]["price"] or 0)
 
-    # Check current reserve token in Pool
+    """
+        Check current reserve token in Pool
+    """
     _reserve0_from_chain, _reserve1_from_chain = get_pair_reserves(_pair_address, _token0_decimals, _token1_decimals)
-    # Get pair AMM configuration
+
+    """
+        Get pair AMM configuration
+    """
+    #       1. Base Threshold
     _base_threshold_key, _base_threshold_field = gen_non_expirable_key(
         f"base_threshold_{_token0_symbol}{_token1_symbol}",
         DefaultConfig.ENV
@@ -99,6 +118,7 @@ def on_message_rebalance_pair(channel, method, properties, body):
         redis_field=_base_threshold_field
     ) or 0)
 
+    #       2. Limit threshold
     _limit_threshold_key, _limit_threshold_field = gen_non_expirable_key(
         f"limit_threshold_{_token0_symbol}{_token1_symbol}",
         DefaultConfig.ENV
@@ -108,91 +128,100 @@ def on_message_rebalance_pair(channel, method, properties, body):
         redis_field=_limit_threshold_field
     ) or 0)
 
+    """
+        Handler for rebalance    
+    """
     if _limit_threshold != 0:
-        # Choose threshold
-        _range_threshold = _limit_threshold / 10000
-        _base_threshold /= 10000
-        # Proportion
-        _from_chain_ratio = _reserve0_from_chain / _reserve1_from_chain
-        _oracle_ratio = _token0_oracle_price / _token1_oracle_price
+        AMAConfigService.set_limit_threshold(
+            pair=f"{_token0_symbol}{_token1_symbol}",
+            value=1000
+        )
 
-        _need_to_rebalance = True \
-            if abs(_from_chain_ratio - _oracle_ratio) / _oracle_ratio > _range_threshold \
-            else False
+    # Choose threshold
+    _range_threshold = _limit_threshold / 10000
+    _base_threshold /= 10000
+    # Proportion
+    _from_chain_ratio = _reserve0_from_chain / _reserve1_from_chain
+    _oracle_ratio = _token0_oracle_price / _token1_oracle_price
 
-        if _need_to_rebalance:
-            _swap, _amount_in = calculate_amount_to_rebalance(
-                _reserve0=_reserve0_from_chain,
-                _reserve1=_reserve1_from_chain,
-                _fee=AppConstants.SWAP_FEE,
-                _oracle_ratio=_oracle_ratio
+    _need_to_rebalance = True \
+        if abs(_from_chain_ratio - _oracle_ratio) / _oracle_ratio > _range_threshold \
+        else False
+
+    if _need_to_rebalance:
+        _swap, _amount_in = calculate_amount_to_rebalance(
+            _reserve0=_reserve0_from_chain,
+            _reserve1=_reserve1_from_chain,
+            _fee=AppConstants.SWAP_FEE,
+            _oracle_ratio=_oracle_ratio
+        )
+        print("_amount_in = ", _amount_in)
+
+        if _amount_in:
+            _in_decimal = _token0_decimals if _swap else _token1_decimals
+            _amount_out = get_amount_out(
+                _amount_in=int(_amount_in * 10 ** _in_decimal),
+                _reserve_in=int(_reserve0_from_chain * 10 ** _token0_decimals),
+                _reserve_out=int(_reserve1_from_chain * 10 ** _token1_decimals),
+                _fee=AppConstants.SWAP_FEE
             )
-            print("_amount_in = ", _amount_in)
 
-            if _amount_in:
-                _in_decimal = _token0_decimals if _swap else _token1_decimals
-                _amount_out = get_amount_out(
-                    _amount_in=int(_amount_in * 10 ** _in_decimal),
-                    _reserve_in=int(_reserve0_from_chain * 10 ** _token0_decimals),
-                    _reserve_out=int(_reserve1_from_chain * 10 ** _token1_decimals),
-                    _fee=AppConstants.SWAP_FEE
-                )
+            _amount_out_min = _amount_out * (1 - AppConstants.SWAP_SLIPPAGE / 1000)
+            # Approve Router to use token
+            make_transact(
+                contract_address=_token1_address if _swap else _token0_address,
+                abi_file_name="Token",
+                transact_function_name="approve",
+                params=[
+                    _router_address,
+                    int(_amount_in * 10 ** _in_decimal)
+                ]
+            )
+            # Swap
+            _resp = make_transact(
+                contract_address=_router_address,
+                abi_file_name="PoolRouter",
+                transact_function_name="swapExactTokensForTokens",
+                params=[
+                    int(_amount_in * 10 ** _in_decimal),
+                    int(_amount_out_min),
+                    [
+                        _token1_address if _swap else _token0_address,
+                        _token0_address if _swap else _token1_address
+                    ],
+                    DefaultConfig.CALLER,
+                    int(dt_utcnow().timestamp() + AppConstants.SWAP_DEADLINE)
+                ]
+            )
+            print("_swap_transact_resp: ", _resp, type(_resp))
+            AmmHistoryLogsModel.insert(
+                {
+                    "env": DefaultConfig.ENV,
+                    "swap_info": {
+                        "amount_in": str(_amount_in * 10 ** _in_decimal),
+                        "amount_out_min": str(_amount_out_min),
+                        "path": [
+                            {
+                                "address": _token1_address if _swap else _token0_address,
+                                "symbol": _token1_symbol if _swap else _token0_symbol
+                            },
+                            {
+                                "address": _token0_address if _swap else _token1_address,
+                                "symbol": _token0_symbol if _swap else _token1_symbol
+                            }
 
-                _amount_out_min = _amount_out * (1 - AppConstants.SWAP_SLIPPAGE / 1000)
-                # Approve Router to use token
-                make_transact(
-                    contract_address=_token1_address if _swap else _token0_address,
-                    abi_file_name="Token",
-                    transact_function_name="approve",
-                    params=[
-                        _router_address,
-                        int(_amount_in * 10 ** _in_decimal)
-                    ]
-                )
-                # Swap
-                _resp = make_transact(
-                    contract_address=_router_address,
-                    abi_file_name="PoolRouter",
-                    transact_function_name="swapExactTokensForTokens",
-                    params=[
-                        int(_amount_in * 10 ** _in_decimal),
-                        int(_amount_out_min),
-                        [
-                            _token1_address if _swap else _token0_address,
-                            _token0_address if _swap else _token1_address
                         ],
-                        DefaultConfig.CALLER,
-                        int(dt_utcnow().timestamp() + AppConstants.SWAP_DEADLINE)
-                    ]
-                )
-                print("DEADLINE : ", int(dt_utcnow().timestamp() + AppConstants.SWAP_DEADLINE))
-                AmmHistoryLogsModel.insert(
-                    {
-                        "env": DefaultConfig.ENV,
-                        "swap_info": {
-                            "amount_in": str(_amount_in * 10 ** _in_decimal),
-                            "amount_out_min": str(_amount_out_min),
-                            "path": [
-                                {
-                                    "address": _token1_address if _swap else _token0_address,
-                                    "symbol": _token1_symbol if _swap else _token0_symbol
-                                },
-                                {
-                                    "address": _token0_address if _swap else _token1_address,
-                                    "symbol": _token0_symbol if _swap else _token1_symbol
-                                }
+                        "deadline": int(dt_utcnow().timestamp() + AppConstants.SWAP_DEADLINE)
+                    },
+                    "tx_id": _resp["id"] if isinstance(_resp, dict) else None,
+                    "tx_info": str(_resp),
+                    "status": "Done" if isinstance(_resp, dict) else "Reverted"
+                }
+            )
 
-                            ],
-                            "deadline": int(dt_utcnow().timestamp() + AppConstants.SWAP_DEADLINE)
-                        },
-                        "tx_id": _resp["id"] if isinstance(_resp, dict) else None,
-                        "tx_info": _resp,
-                        "status": "Done" if isinstance(_resp, dict) else "Reverted"
-                    }
-                )
-    else:
-        print("Limit threshold is invalid !!!")
-
+    """
+        ACK Rabbit Message
+    """
     channel.basic_ack(delivery_tag=method.delivery_tag)
 
 
