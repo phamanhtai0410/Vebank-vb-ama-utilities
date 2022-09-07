@@ -173,8 +173,15 @@ def on_message_rebalance_pair(channel, method, properties, body):
                             "amount_in": str(_amount_in * 10 ** _in_decimal),
                             "amount_out_min": str(_amount_out_min),
                             "path": [
-                                _token1_address if _swap else _token0_address,
-                                _token0_address if _swap else _token1_address
+                                {
+                                    "address": _token1_address if _swap else _token0_address,
+                                    "symbol": _token1_symbol if _swap else _token0_symbol
+                                },
+                                {
+                                    "address": _token0_address if _swap else _token1_address,
+                                    "symbol": _token0_symbol if _swap else _token1_symbol
+                                }
+
                             ],
                             "deadline": int(dt_utcnow().timestamp() + AppConstants.SWAP_DEADLINE)
                         },
