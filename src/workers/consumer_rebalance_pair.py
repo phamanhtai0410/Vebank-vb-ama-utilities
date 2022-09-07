@@ -186,6 +186,7 @@ def on_message_rebalance_pair(channel, method, properties, body):
                             "deadline": int(dt_utcnow().timestamp() + AppConstants.SWAP_DEADLINE)
                         },
                         "tx_id": _resp["id"] if isinstance(_resp, dict) else None,
+                        "tx_info": _resp,
                         "status": "Done" if isinstance(_resp, dict) else "Reverted"
                     }
                 )
