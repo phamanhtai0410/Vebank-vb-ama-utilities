@@ -1,10 +1,4 @@
+bin
+vendor
 .idea
-*.pyc
-code/config
-test
-.env
-.vscode
-venv
-supervisord.pid
-*.model
-__pycache__
+./main_test.go

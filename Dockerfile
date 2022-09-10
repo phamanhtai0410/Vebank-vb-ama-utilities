@@ -1,19 +1,16 @@
-FROM 420811272222.dkr.ecr.ap-southeast-1.amazonaws.com/vb-staging-ecr:pythonbase_v1
-ENV PYTHONUNBUFFERED=1
-ENV PYTHONIOENCODING=UTF-8
+# compile env
+FROM golang:1.11
+COPY . /amm-bots
+WORKDIR /amm-bots
 
-RUN apk update && apk add --no-cache  tzdata git make  build-base
+# compile main.go
+RUN go build -o bin/amm-bots -v -ldflags '-s -w' main.go
 
+# execute env
+FROM alpine
+RUN mkdir /lib64 && ln -s /lib/libc.musl-x86_64.so.1 /lib64/ld-linux-x86-64.so.2
+RUN apk --no-cache add ca-certificates
 
-RUN apk upgrade -U \
-    && apk add --no-cache -u ca-certificates libffi-dev libva-intel-driver supervisor python3-dev build-base linux-headers pcre-dev curl busybox-extras \
-    && rm -rf /tmp/* /var/cache/*
-
-COPY requirements.txt /
-COPY lib/requirements.txt /lib/requirements.txt
-RUN pip --no-cache-dir install --upgrade pip setuptools wheel
-RUN pip --no-cache-dir install -r /lib/requirements.txt
-RUN pip --no-cache-dir install -r requirements.txt
-COPY conf/supervisor/ /etc/supervisor.d/
-COPY . /webapps
-WORKDIR /webapps
+# copy binary file from compile env to execute env
+COPY --from=0 /amm-bots/bin/amm-bots /bin/
+ENTRYPOINT /bin/amm-bots
