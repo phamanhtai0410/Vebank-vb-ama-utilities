@@ -1,0 +1,188 @@
+variables:
+  REGION: asia-southeast1
+  IMAGE_NAME: vb-amm-utilities
+  APP_NAME_SCHEDULE: vb-amm-utilities-schedule-job
+  APP_NAME_WORKER: vb-amm-utilities-worker
+  APP_NAME_API: vb-amm-utilities-api
+  CONTAINER_REPO_ASIA_DEV: 420811272222.dkr.ecr.ap-southeast-1.amazonaws.com/vb-develop-ecr/amm-utilities
+  CONTAINER_REPO_ASIA_STAG: 420811272222.dkr.ecr.ap-southeast-1.amazonaws.com/vb-staging-ecr/amm-utilities
+  CONTAINER_REPO_ASIA_PROD: 420811272222.dkr.ecr.ap-southeast-1.amazonaws.com/vb-production-ecr/monitor-liquidation-job
+  NAMESPACE_STAG: vb-jobs-stag
+  NAMESPACE_STAG_API: vb-api-stag
+  NAMESPACE_DEV: vb-jobs-dev
+  NAMESPACE_DEV_API: vb-api-dev
+  NAMESPACE_PROD: vb-jobs
+  NAMESPACE_PROD_API: vb-api
+  FULLREPO_ASIA_DEV: $CONTAINER_REPO_ASIA_DEV:$CI_COMMIT_SHORT_SHA
+  FULLREPO_ASIA_STAG: $CONTAINER_REPO_ASIA_sSTAG:$CI_COMMIT_SHORT_SHA
+  FULLREPO_ASIA_PROD: $CONTAINER_REPO_ASIA_PROD:$CI_COMMIT_SHORT_SHA
+  HELM_VALUE: ${CI_COMMIT_REF_NAME}
+  HELM_VERSION: 2.4.6
+  AWS_REGION: ap-southeast-1
+  GITLAB_TOKEN: $GITLAB_RUNNER_TOKEN
+  DOCKER_DRIVER: overlay
+  DOCKER_HOST: tcp://localhost:2375
+  DOCKER_TLS_CERTDIR: ""
+  GIT_SUBMODULE_STRATEGY: recursive
+
+stages:
+  - build
+  - deploy
+
+.kubectl_config: &kubectl_config
+  - |
+      if [ "$CI_COMMIT_REF_NAME" == "master" ]; then
+        aws eks --region $AWS_REGION update-kubeconfig --name rinz-production-cluster
+      fi
+  - |
+      if [ "$CI_COMMIT_REF_NAME" == "stag" ]; then
+        aws eks --region $AWS_REGION update-kubeconfig --name rinz-staging-cluster
+      fi
+.predeploy: &predeploy |
+  apk add --no-cache  bash git  python3 py3-pip curl
+  pip3 install --upgrade pip 
+  pip3 install --no-cache-dir awscli
+  helm plugin install https://github.com/hypnoglow/helm-s3.git --version 0.12.0
+  helm repo add helm-template s3://rinz-helm-template
+  helm pull s3://rinz-helm-template/helm-template-$HELM_VERSION.tgz --untar=true
+
+build_dev:
+  image: docker:19.03.1
+  tags:
+  - rinz-stag
+  stage: build
+  services:
+  - docker:19.03.1-dind
+  before_script:
+    - apk add --no-cache curl jq python py-pip wget git bash
+    - pip install awscli 
+    - git submodule add -f --branch stag https://read-token:$GITLAB_TOKEN@gitlab.rinznetwork.com/vebank/vb-lib.git lib
+    - export VERIFY_CHECKSUM=false && curl -fsSL -o get_helm.sh https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 && chmod +x ./get_helm.sh && ./get_helm.sh
+    - curl -Lo skaffold https://storage.googleapis.com/skaffold/releases/v1.38.0/skaffold-linux-amd64 && chmod +x skaffold &&  mv skaffold /usr/local/bin
+    - git submodule sync --recursive
+    - git submodule update --init --remote --recursive
+  script:
+    - aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $CONTAINER_REPO_ASIA_DEV
+    - |
+      if [ "$CI_COMMIT_REF_NAME" == "dev" ]; then
+        sed -i -e "s#\[NAMESPACE\]#$NAMESPACE_DEV#g" skaffold.yaml
+        sed -i -e "s#\[CONTAINER_REPO\]#$CONTAINER_REPO_ASIA_DEV#g" skaffold.yaml
+        sed -i -e "s#\[APP_NAME\]#$IMAGE_NAME#g" skaffold.yaml
+        sed -i -e "s#\[CI_COMMIT_REF_NAME\]#$CI_COMMIT_REF_NAME#g" skaffold.yaml
+        cat skaffold.yaml
+      fi
+    - /usr/local/bin/skaffold build -p profile-dev --file-output=build_sync.json
+  only:
+    refs:
+      - dev
+  artifacts:
+    paths:
+    - build_sync.json
+build_stag:
+  image: docker:19.03.1
+  tags:
+  - rinz-stag
+  stage: build
+  services:
+  - docker:19.03.1-dind
+  before_script:
+    - apk add --no-cache curl jq python py-pip wget git bash
+    - pip install awscli 
+    - git submodule add -f --branch stag https://read-token:$GITLAB_TOKEN@gitlab.rinznetwork.com/vebank/vb-lib.git lib
+    - export VERIFY_CHECKSUM=false && curl -fsSL -o get_helm.sh https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 && chmod +x ./get_helm.sh && ./get_helm.sh
+    - curl -Lo skaffold https://storage.googleapis.com/skaffold/releases/v1.38.0/skaffold-linux-amd64 && chmod +x skaffold &&  mv skaffold /usr/local/bin
+    - git submodule sync --recursive
+    - git submodule update --init --remote --recursive
+  script:
+    - aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $CONTAINER_REPO_ASIA_STAG
+    - |
+      if [ "$CI_COMMIT_REF_NAME" == "stag" ]; then
+        sed -i -e "s#\[NAMESPACE\]#$NAMESPACE_STAG#g" skaffold.yaml
+        sed -i -e "s#\[CONTAINER_REPO\]#$CONTAINER_REPO_ASIA_STAG#g" skaffold.yaml
+        sed -i -e "s#\[APP_NAME\]#$IMAGE_NAME#g" skaffold.yaml
+        sed -i -e "s#\[CI_COMMIT_REF_NAME\]#$CI_COMMIT_REF_NAME#g" skaffold.yaml
+        cat skaffold.yaml
+      fi
+    - /usr/local/bin/skaffold build -p profile-stag --file-output=build_sync.json
+  only:
+    refs:
+      - stag
+   
+  artifacts:
+    paths:
+    - build_sync.json
+
+deploy_worker_stag:
+  stage: deploy
+  image:  alpine/helm:3.2.1
+  tags:
+  - rinz-stag
+  script:
+    - *predeploy
+    - *kubectl_config
+    - |
+      if [ "$CI_COMMIT_REF_NAME" == "stag" ]; then
+        sed -i -e "s#\[NAMESPACE\]#$NAMESPACE_STAG#g" skaffold.yaml
+        sed -i -e "s#\[APP_NAME\]#$APP_NAME_WORKER#g" skaffold.yaml
+        sed -i -e "s#\[CONTAINER_REPO\]#$CONTAINER_REPO_ASIA_STAG#g" skaffold.yaml
+        sed -i -e "s#\[CI_COMMIT_REF_NAME\]#$CI_COMMIT_REF_NAME#g" skaffold.yaml
+      fi
+    - git clone https://read-token:$GITLAB_TOKEN@gitlab.rinznetwork.com/rinz-io-devops/helm-value/$IMAGE_NAME.git
+    - mv $IMAGE_NAME/${APP_NAME_WORKER}-stag.yaml .
+    - curl -LO https://storage.googleapis.com/kubernetes-release/release/v1.18.0/bin/linux/amd64/kubectl && chmod +x ./kubectl && mv ./kubectl /usr/local/bin/kubectl
+    - curl -Lo skaffold https://storage.googleapis.com/skaffold/releases/v1.38.0/skaffold-linux-amd64 && chmod +x skaffold &&  mv skaffold /usr/local/bin
+    - /usr/local/bin/skaffold deploy -p profile-${APP_NAME_WORKER}-stag   -a build_sync.json
+
+  only:
+    refs:
+      - stag
+ 
+deploy_schedule_stag:
+  stage: deploy
+  image:  alpine/helm:3.2.1
+  tags:
+  - rinz-stag
+  script:
+    - *predeploy
+    - *kubectl_config
+    - |
+      if [ "$CI_COMMIT_REF_NAME" == "stag" ]; then
+        sed -i -e "s#\[NAMESPACE\]#$NAMESPACE_STAG#g" skaffold.yaml
+        sed -i -e "s#\[APP_NAME\]#$APP_NAME_SCHEDULE#g" skaffold.yaml
+        sed -i -e "s#\[CONTAINER_REPO\]#$CONTAINER_REPO_ASIA_STAG#g" skaffold.yaml
+        sed -i -e "s#\[CI_COMMIT_REF_NAME\]#$CI_COMMIT_REF_NAME#g" skaffold.yaml
+      fi
+    - git clone https://read-token:$GITLAB_TOKEN@gitlab.rinznetwork.com/rinz-io-devops/helm-value/$IMAGE_NAME.git
+    - mv $IMAGE_NAME/${APP_NAME_SCHEDULE}-stag.yaml .
+    - curl -LO https://storage.googleapis.com/kubernetes-release/release/v1.18.0/bin/linux/amd64/kubectl && chmod +x ./kubectl && mv ./kubectl /usr/local/bin/kubectl
+    - curl -Lo skaffold https://storage.googleapis.com/skaffold/releases/v1.38.0/skaffold-linux-amd64 && chmod +x skaffold &&  mv skaffold /usr/local/bin
+    - /usr/local/bin/skaffold deploy -p profile-${APP_NAME_SCHEDULE}-stag   -a build_sync.json
+
+  only:
+    refs:
+      - stag
+
+deploy_api_stag:
+  stage: deploy
+  image:  alpine/helm:3.2.1
+  tags:
+  - rinz-stag
+  script:
+    - *predeploy
+    - *kubectl_config
+    - |
+      if [ "$CI_COMMIT_REF_NAME" == "stag" ]; then
+        sed -i -e "s#\[NAMESPACE\]#$NAMESPACE_STAG_API#g" skaffold.yaml
+        sed -i -e "s#\[APP_NAME\]#$APP_NAME_API#g" skaffold.yaml
+        sed -i -e "s#\[CONTAINER_REPO\]#$CONTAINER_REPO_ASIA_STAG#g" skaffold.yaml
+        sed -i -e "s#\[CI_COMMIT_REF_NAME\]#$CI_COMMIT_REF_NAME#g" skaffold.yaml
+      fi
+    - git clone https://read-token:$GITLAB_TOKEN@gitlab.rinznetwork.com/rinz-io-devops/helm-value/$IMAGE_NAME.git
+    - mv $IMAGE_NAME/${APP_NAME_API}-stag.yaml .
+    - curl -LO https://storage.googleapis.com/kubernetes-release/release/v1.18.0/bin/linux/amd64/kubectl && chmod +x ./kubectl && mv ./kubectl /usr/local/bin/kubectl
+    - curl -Lo skaffold https://storage.googleapis.com/skaffold/releases/v1.38.0/skaffold-linux-amd64 && chmod +x skaffold &&  mv skaffold /usr/local/bin
+    - /usr/local/bin/skaffold deploy -p profile-${APP_NAME_API}-stag   -a build_sync.json
+
+  only:
+    refs:
+      - stag
