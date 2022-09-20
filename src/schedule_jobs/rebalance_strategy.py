@@ -1,6 +1,6 @@
 import getopt
 import sys
-import os
+import shutil
 import time
 import traceback
 import sentry_sdk
@@ -50,7 +50,8 @@ def main(_cfg):
             )
 
             for _pair in _list:
-                print("=" * os.get_terminal_size()[0])
+                terminal_size = shutil.get_terminal_size(fallback=(120, 50))
+                print("=" * terminal_size.columns)
                 print(f'Gen new BOT instant for pair {get(_pair, "pair_address")}')
                 _gen_new_bot = BotExecutedCommands(
                     base_token_address=get(_pair, "token0_address"),
