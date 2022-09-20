@@ -3,7 +3,7 @@
 import os
 import json
 from dotenv import load_dotenv
-
+from src.constants import BotType
 load_dotenv()
 
 
@@ -64,4 +64,12 @@ class DefaultConfig(BaseConfig):
     ENV = os.getenv('ENV') or 'dev'
 
     API_URL = os.getenv("API_URL")
+
+    # Bot Configurations
+    BOT_TYPE = os.getenv("BOT_TYPE") or BotType.CONSTANT_PRODUCT
+    PRICE_GAP = float(os.getenv("PRICE_GAP")) or 0.2
+    BOT_TIME_SLEEP = int(os.getenv("BOT_TIME_SLEEP")) or 15
+    BOT_DEVIATION = os.getenv("BOT_DEVIATION") or 0.01
+
+
 

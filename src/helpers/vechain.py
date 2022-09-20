@@ -143,7 +143,7 @@ def get_token_symbol(token_address):
     connector = Connect(DefaultConfig.VECHAIN_RPC)
 
     # Contract
-    _contract_instance = Contract.fromFile('src/abis/Token.json')
+    _contract_instance = Contract.fromFile('src/abis/VIP180.json')
 
     # Call update
     _res = connector.call(

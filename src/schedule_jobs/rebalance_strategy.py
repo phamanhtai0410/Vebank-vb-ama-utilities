@@ -1,5 +1,6 @@
 import getopt
 import sys
+import os
 import time
 import traceback
 import sentry_sdk
@@ -8,8 +9,10 @@ from lib.utils import amqp
 from src.config import DefaultConfig
 from src.services.ama_config import AMAConfigService
 from src.models.pairs import PairsModel
+from pydash import get
 from pymodm import connect
 from lib.enums.database import DBName
+from src.helpers.bot.execute_bot import BotExecutedCommands
 
 
 """
@@ -47,26 +50,16 @@ def main(_cfg):
             )
 
             for _pair in _list:
-                mq.publish(
-                    payload={
-                        "pair_address": str(_pair["pair_address"]),
-                        "factory_address": str(_factory_address),
-                        "router_address": str(_router_address),
-                        "reserve0": str(_pair["reserve0"]),
-                        "reserve1": str(_pair["reserve1"]),
-                        "token0_address": str(_pair["token0_address"]),
-                        "token1_address": str(_pair["token1_address"]),
-                    }
+                print("=" * os.get_terminal_size()[0])
+                print(f'Gen new BOT instant for pair {get(_pair, "pair_address")}')
+                _gen_new_bot = BotExecutedCommands(
+                    base_token_address=get(_pair, "token0_address"),
+                    quote_token_address=get(_pair, "token1_address"),
+                    pair_address=get(_pair, "pair_address"),
+                    mq=mq
                 )
-                print("Push mess : ", {
-                        "pair_address": str(_pair["pair_address"]),
-                        "factory_address": str(_factory_address),
-                        "router_address": str(_router_address),
-                        "reserve0": str(_pair["reserve0"]),
-                        "reserve1": str(_pair["reserve1"]),
-                        "token0_address": str(_pair["token0_address"]),
-                        "token1_address": str(_pair["token1_address"]),
-                    })
+                _gen_new_bot.main_bot_running()
+
         except Exception as e:
             print(e)
             sentry_sdk.capture_exception()

@@ -8,4 +8,4 @@ import lib.enums.http as enum
 
 
 class ErrorCode(enum.ErrorCode):
-    ErrorCampaign = 'ErrorCampaign'
+    BotError = 'BotError'

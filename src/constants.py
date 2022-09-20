@@ -15,3 +15,8 @@ class AppConstants(object):
     SWAP_SLIPPAGE = 50
     SWAP_DEADLINE = 60
     pass
+
+
+class BotType(object):
+    CONSTANT_PRODUCT = 'CONSTANT_PRODUCT'
+    SPECIAL_SYMBOL = ["WVET", "vBTC", "vETH"]
