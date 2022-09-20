@@ -8,4 +8,3 @@ venv
 supervisord.pid
 *.model
 __pycache__
-lib
